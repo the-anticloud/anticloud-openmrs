@@ -1,0 +1,471 @@
+# OPENMRS
+
+![licence](https://img.shields.io/badge/licence-NOASSERTION-blue) ![offline-first](https://img.shields.io/badge/offline--first-air--gap-green) ![audit](https://img.shields.io/badge/audit-SHA3--256-orange) ![checks](https://img.shields.io/badge/checks-unknown_PASS-brightgreen)
+
+> Governed Anticloud packaging of the upstream project `OPENMRS` in category **MEDICAL_HEALTH**. check results: see ISOLATED_LAB_RESULTS. Every number below traces to a named file + run stamp; nothing is borrowed from other projects.
+
+**Upstream:** OPENMRS · **Upstream pin:** `52f140a79c35796f055c7d10bce5494948a4396d` · **Category:** MEDICAL_HEALTH · **Vendor:** Anticloud FZ LLE · **Licence:** NOASSERTION
+
+---
+
+## What This Project Does
+
+# OpenMRS 3.0 Reference Application
+
+This project holds the build configuration for the OpenMRS 3.0 reference application, found on
+https://dev3.openmrs.org and https://o3.openmrs.org.
+
+## Quick start
+
+### Run the app (using pre-built images)
+
+```bash
+docker compose up
+```
+
+The OpenMRS 3.x UI is accessible at http://localhost/openmrs/spa
+
+OpenMRS Legacy UI is accessible at http://localhost/openmrs
+
+### Production deployment with SSL
+
+For production deployments with HTTPS/SSL certificates, create a `.env` file in the project root:
+
+```env
+COMPOSE_FILE=docker-compose.yml:docker-compose.ssl.yml
+SSL_MODE=prod
+CERT_WEB_DOMAINS=your-domain.com
+CERT_CONTACT_EMAIL=admin@your-domain.com
+```
+
+Then start the application as usual:
+
+```bash
+docker compose up
+```
+
+The `COMPOSE_FILE` variable tells Docker Compose to automatically include the SSL overlay, so you never need to pass `-f` flags. See the [SSL/HTTPS Configuration](#sslhttps-configuration) section for detailed setup instructions.
+
+## Overview
+
+This distribution consists of four images:
+
+- **db** - This is just the standard MariaDB image supplied to use as a database
+- **backend** - This image is the OpenMRS backend. It is built from the main Dockerfile included in the root of the project and
+  based on the core OpenMRS Docker file. Additional contents for this image are drawn from the `distro` sub-directory which
+  includes a full Initializer configuration for the reference application intended as a starting point.
+- **frontend** - This image is a simple nginx container that embeds the 3.x frontend, including the modules described in the
+  `frontend/spa-assemble-config.json` file.
+- **gateway** - This image is an nginx reverse proxy that sits in front of the `backend` and `frontend` containers
+  and provides a common interface to both. This helps mitigate CORS issues.
+
+When running with SSL enabled (using `docker-compose.ssl.yml`), an additional service is included:
+
+- **certbot** - This image is used for generating and renewing SSL certificates (Let's Encrypt or self-signed)
+
+## SSL/HTTPS Configuration
+
+The application can be run with SSL/HTTPS support for both development and production environments.
+
+SSL configuration lives in `docker-compose.ssl.yml`, which is included alongside the base `docker-compose.yml`. The recommended way to enable it is via a `.env` file in the project root:
+
+```env
+COMPOSE_FILE=docker-compose.yml:docker-compose.ssl.yml
+```
+
+This tells Docker Compose to automatically include the SSL overlay, so all commands remain simply `docker compose up`, `docker compose down`, etc. without needing `-f` flags. All SSL-related environment variables (like `SSL_MODE` and `CERT_WEB_DOMAINS`) can also be set in this file.
+
+### Development mode (self-signed certificates)
+
+For local development with HTTPS:
+
+```env
+# .env
+COMPOSE_FILE=docker-compose.yml:docker-compose.ssl.yml
+```
+
+```bash
+docker compose up
+```
+
+This will:
+- Automatically generate self-signed certificates for `localhost` and `127.0.0.1`
+- Configure nginx to use HTTPS on port 443
+- Redirect HTTP (port 80) to HTTPS
+
+The application will be accessible at:
+- https://localhost/openmrs/spa
+- https://127.0.0.1/openmrs/spa
+
+**Note**: Your browser will show a security warning for self-signed certificates. This is expected - click "Advanced" and proceed to the site.
+
+### Production mode (Let's Encrypt)
+
+For production deployments with valid SSL certificates from Let's Encrypt, create a `.env` file:
+
+```env
+# .env
+COMPOSE_FILE=docker-compose.yml:docker-compose.ssl.yml
+SSL_MODE=prod
+CERT_WEB_DOMAINS=example.com
+CERT_CONTACT_EMAIL=admin@example.com
+```
+
+```bash
+docker compose up
+```
+
+**Configuration options**:
+
+- `SSL_MODE=prod` - Use Let's Encrypt certificates (required)
+- `CERT_WEB_DOMAINS` - Your domain name(s), comma-separated (e.g., `example.com,www.example.com`). The first domain is used as the primary domain for certificate paths and the nginx `server_name` directive.
+- `CERT_CONTACT_EMAIL` - Email for Let's Encrypt notifications
+- `CERT_WEB_DOMAIN_COMMON_NAME` - (Optional) Override the primary domain. By default, this is derived from the first domain in `CERT_WEB_DOMAINS`. You only need to set this if you want the certificate's common name to differ from the first domain.
+- `SSL_STAGING=true` - (Optional) Use Let's Encrypt staging environment for testing
+
+**The certbot container will**:
+1. Create a temporary certificate to allow nginx to start
+2. Wait for nginx to be ready
+3. Request a real Let's Encrypt certificate via ACME HTTP-01 challenge
+4. Reload nginx with the real certificate
+5. Run a renewal daemon that checks for renewal every 12 hours
+
+**Important**: Ensure your domain's DNS is correctly configured to point to your server before starting, as Let's Encrypt needs to verify domain ownership via HTTP.
+
+### Testing with Let's Encrypt staging
+
+To test the SSL setup without hitting Let's Encrypt rate limits, add `SSL_STAGING=true` to your `.env` file:
+
+```env
+# .env
+COMPOSE_FILE=docker-compose.yml:docker-compose.ssl.yml
+SSL_MODE=prod
+SSL_STAGING=true
+CERT_WEB_DOMAINS=example.com
+CERT_CONTACT_EMAIL=admin@example.com
+```
+
+Staging certificates won't be trusted by browsers but allow you to verify the setup works correctly. Remove `SSL_STAGING` (or set it to `false`) once you've confirmed the setup works.
+
+### Certificate profiles
+
+Let's Encrypt offers different certificate profiles with varying validity periods:
+
+| Profile | Validity | Use Case |
+|---------|----------|----------|
+| `classic` | 90 days (default) | Standard certificates |
+| `tlsserver` | 45 days | Shorter validity for improved security |
+| `shortlived` | 6 days | Required for IP address certificates |
+
+To request a specific profile, add `CERT_PROFILE` to your `.env` file:
+
+```env
+# .env (additions)
+CERT_PROFILE=tlsserver
+```
+
+**Note**: Let's Encrypt is transitioning all certificates to 45-day validity by 2028. Using the `tlsserver` profile allows you to opt-in to shorter certificates now.
+
+### IP address certificates
+
+Let's Encrypt now supports issuing certificates for publicly-addressable IP addresses. These certificates must use the `shortlived` profile (6-day validity).
+
+```env
+# .env
+COMPOSE_FILE=docker-compose.yml:docker-compose.ssl.yml
+SSL_MODE=prod
+CERT_WEB_DOMAINS=203.0.113.50
+CERT_CONTACT_EMAIL=admin@example.com
+```
+
+**Important notes for IP address certificates**:
+- The IP address must be publicly addressable (not private IPs like 192.168.x.x or 10.x.x.x)
+- The `shortlived` profile is automatically selected when an IP address is detected
+- Certificates are valid for approximately 6 days and renew automatically
+- IPv6 addresses are also supported
+
+You can also mix domain names and IP addresses:
+
+```env
+CERT_WEB_DOMAINS=example.com,203.0.113.50
+```
+
+When any IP address is included, the shortlived profile is required and will be automatically enforced.
+
+### Manual certificate renewal
+
+While certificates renew automatically in production mode, you can manually force renewal if needed.
+
+**If the certbot container is running** (prod mode):
+
+```bash
+# Force renewal
+docker compose exec certbot certbot renew --force-renewal --webroot -w /var/www/certbot
+
+# Reload nginx to pick up new certificates
+docker compose exec gateway nginx -s reload
+```
+
+**If certbot container has stopped or for one-off renewal**:
+
+```bash
+# Run certbot in one-off mode (override entrypoint to run certbot directly)
+docker compose run --rm --entrypoint certbot certbot \
+  renew --force-renewal --webroot -w /var/www/certbot
+
+# Reload nginx
+docker compose exec gateway nginx -s reload
+```
+
+**Check certificate expiration**:
+
+```bash
+# If certbot container is running
+docker compose exec certbot certbot certificates
+
+# If certbot container is stopped
+docker compose run --rm --entrypoint certbot certbot certificates
+```
+
+### Regenerating certificates
+
+If you need to start fresh with certificates (e.g., after changing domains), delete the letsencrypt volume and restart:
+
+```bash
+docker compose down
+
+# Remove only this project's letsencrypt volume
+docker volume rm "$(docker compose config | awk '/^name:/{print $2}')_letsencrypt-data"
+
+docker compose up
+```
+
+The certbot entrypoint skips certificate generation when it finds existing certificates for the configured domain. Removing the volume forces it to go through the full setup process again.
+
+### Running with Grafana
+
+The distro ships an optional monitoring stack -- Grafana, Prometheus, Loki, Alloy and
+blackbox-exporter -- which collects container logs, HTTP endpoint probes and JVM metrics
+from the OpenMRS backend. Run it with:
+```bash
+docker compose -f docker-compose.yml -f docker-compose.monitoring-bundled.yml up
+```
+Grafana will be available at http://localhost/grafana. Use admin as username and see docker-compose.monitoring-bundled.yml for the initial password.
+
+Three dashboards are provisioned automatically:
+
+| Dashboard | Data source | Shows |
+|-----------|-------------|-------|
+| Logs (home) | Loki | Container logs, filterable by service, level and free text |
+| JVM Runtime | Prometheus | Backend heap, GC, threads, loaded classes and CPU |
+| Endpoint health check | Prometheus | Availability and latency of probed HTTP endpoints |
+
+If you would like to use grafana in your distro, you just need to copy over `docker-compose.monitoring-bundled.yml`.
+
+Note that this is a single-node example: Prometheus, Loki and Grafana each store data in a
+local volume. For production or multi-replica deployments, reuse the configuration pattern
+shown here rather than the compose file itself.
+
+### Backend metrics (OpenTelemetry)
+
+JVM metrics come from the OpenTelemetry Java agent, which is bundled in the `openmrs-core`
+base image (downloaded and checksum-verified in that image's Dockerfile). Setting
+`OMRS_OTEL_ENABLED=true` makes the backend's startup script attach the agent to Tomcat.
+
+The path is: Java agent -> OTLP/HTTP -> Alloy -> Prometheus -> Grafana.
+
+Because the agent auto-instruments the whole web application, it exports HTTP server and
+JDBC client metrics in addition to the `jvm.*` family. The provisioned dashboard plots the
+JVM metrics only; anything else the agent sends is still queryable in Prometheus.
+
+#### Prometheus labels
+
+Alloy converts OTLP resource attributes into Prometheus labels:
+
+- `service.name` becomes the `job` label
+- `service.namespace`, if set, prefixes it as `job="<namespace>/<name>"`
+- `service.instance.id`, if set, becomes the `instance` label
+- all other resource attributes land on the `target_info` metric, reachable with a
+  `group_left` join on `(job, instance)`
+
+This stack sets only `OTEL_SERVICE_NAME`, so the JVM dashboard filters on
+`job="openmrs-backend"` alone. **If you run more than one backend replica, give each a
+unique `service.instance.id`** via `OTEL_RESOURCE_ATTRIBUTES` -- otherwise every replica
+writes to the same series and Prometheus rejects the duplicate samples.
+
+Metric names follow OpenTelemetry semantic conventions and are translated to Prometheus
+naming by Alloy, so upgrading the agent version in `openmrs-core` can rename series and
+require dashboard updates.
+
+### Environment variables reference
+
+#### SSL/certificates
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `SSL_MODE` | `dev` | `dev` for self-signed certificates, `prod` for Let's Encrypt |
+| `SSL_STAGING` | `false` | Use Let's Encrypt staging environment (set to `true` for testing) |
+| `CERT_WEB_DOMAINS` | `localhost,127.0.0.1` | Comma-separated list of domain names or IP addresses |
+| `CERT_WEB_DOMAIN_COMMON_NAME` | first domain from `CERT_WEB_DOMAINS` | Override the primary domain used for certificate paths and nginx `server_name`. Most users should not set this. |
+| `CERT_CONTACT_EMAIL` | (empty) | Email for Let's Encrypt notifications (required in prod mode) |
+| `CERT_RSA_KEY_SIZE` | `4096` | RSA key size for certificates |
+| `CERT_PROFILE` | (empty) | Certificate profile: `classic` (90 days), `tlsserver` (45 days), or `shortlived` (6 days). Auto-set to `shortlived` for IP addresses |
+
+#### Monitoring
+
+| Variable | Default | Overlay | Description |
+|----------|---------|---------|-------------|
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | `http://alloy:4318` | m, g | Where the backend's OpenTelemetry agent sends OTLP data. Point this elsewhere if you run your own collector instead of the bundled Alloy |
+| `OTEL_SERVICE_NAME` | `openmrs-backend` | m, g | Becomes the Prometheus `job` label. Change it if you run more than one backend and need to tell them apart in dashboards |
+| `OTEL_RESOURCE_ATTRIBUTES` | (unset) | m, g | Extra resource attributes attached to every metric, e.g. `service.instance.id=backend-0,deployment.environment.name=prod` |
+| `OTEL_JMX_TARGET_SYSTEM` | (unset) | m, g | Collect JMX metrics for a known system, e.g. `tomcat` |
+| `ALLOY_OTLP_ENDPOINT` | (empty) | m | Upstream OTLP endpoint Alloy forwards metrics to, e.g. a Grafana Cloud or other vendor endpoint. Required: `monitoring-init` fails if it is unset. The format depends on `ALLOY_OTLP_PROTOCOL`: with `http`, the base URL including the scheme and without the `/v1/metrics` suffix the exporter appends itself, e.g. `https://otlp-gateway-prod-eu-west-2.grafana.net/otlp`; with `grpc`, `host:port` with no path, e.g. `collector.example.org:4317` |
+| `ALLOY_OTLP_PROTOCOL` | `http` | m | Protocol used for that upstream export. Valid values: `grpc`, `http` |
+| `ALLOY_OTLP_HEADERS` | (empty) | m | Headers sent with the upstream export, typically authentication. A JSON object, e.g. `{"Authorization":"Basic <base64>"}` |
+| `ALLOY_OTLP_INSECURE` | `false` | m | Set to `true` to skip TLS when talking to the upstream endpoint |
+| `GRAFANA_ADMIN_PASSWORD` | `Admin123` | g | Password for Grafana's `admin` user. Change this before exposing Grafana |
+
+## Contributing to the configuration
+
+This project uses the [Initializer](https://github.com/mekomsolutions/openmrs-module-initializer) module
+to configure metadata for this project. The Initializer configuration can be found in the configuration
+subfolder of the distro folder. Any files added to this will be automatically included as part of the
+metadata for the RefApp.
+
+Eventually, we would like to split this metadata into two packages:
+
+- `openmrs-core`, which will contain all the metadata necessary to run OpenMRS
+- `openmrs-demo`, which will include all of the sample data we use to run the RefApp
+
+The `openmrs-core` package will eventually be a standard part of the distribution, with the `openmrs-demo`
+provided as an optional add-on. Most data in this configuration _should_ be regarded as demo data. We
+anticipate that implementation-specific metadata will replace data in the `openmrs-demo` package,
+though they may use that metadata as a starting point for that customization.
+
+To help us keep track of things, we ask that you suffix any files you add with either
+`-core_demo` for files that should be part of the demo package and `-core_data` for
+those that should be part of the core package. For example, a form named `test_form.json` would become
+`test_core-core_demo.json`.
+
+Frontend configuration can be found in `frontend/config-core_demo.json`.
+
+Thanks!
+
+---
+
+## Installation
+
+See the upstream documentation quoted in What This Project Does above.
+
+## Usage
+
+- **backend** - This image is the OpenMRS backend. It is built from the main Dockerfile included in the root of the project and
+  based on the core OpenMRS Docker file. Additional contents for this image are drawn from the `distro` sub-directory which
+  includes a full Initializer configuration for the reference application intended as a starting point.
+- **frontend** - This image is a simple nginx container that embeds the 3.x frontend, including the modules described in the
+  `frontend/spa-assemble-config.json` file.
+- **gateway** - This image is an nginx reverse proxy that sits in front of the `backend` and `frontend` containers
+  and provides a common interface to both. This helps mitigate CORS issues.
+
+When running with SSL enabled (using `docker-compose.ssl.yml`), an additional service is included:
+
+- **certbot** - This image is used for generating and renewing SSL certificates (Let's Encrypt or self-signed)
+
+## API
+
+This project holds the build configuration for the OpenMRS 3.0 reference application, found on
+https://dev3.openmrs.org and https://o3.openmrs.org.
+
+## Dependencies
+
+| Metric | Value |
+|--------|-------|
+| Files | unknown |
+| Lines of Code | unknown |
+| Dependencies | unknown |
+| Upstream license (harvested) | NOASSERTION |
+| Overlay license | Anticommons 0.1.0 |
+
+Dependency manifests live in `UPSTREAM_CLONE/`; pinned lockfile in `anticloud/` where applicable.
+
+## Configuration
+
+https://dev3.openmrs.org and https://o3.openmrs.org.
+
+## Contributing
+
+SSL configuration lives in `docker-compose.ssl.yml`, which is included alongside the base `docker-compose.yml`. The recommended way to enable it is via a `.env` file in the project root:
+
+```env
+COMPOSE_FILE=docker-compose.yml:docker-compose.ssl.yml
+```
+
+This tells Docker Compose to automatically include the SSL overlay, so all commands remain simply `docker compose up`, `docker compose down`, etc. without needing `-f` flags. All SSL-related environment variables (like `SSL_MODE` and `CERT_WEB_DOMAINS`) can also be set in this file.
+
+## License
+
+Upstream © its respective contributors under NOASSERTION (harvested MIT/Apache-2.0/BSD source; see `UPSTREAM_CLONE/LICENSE`). This packaging overlay is licensed under Anticommons 0.1.0.
+
+## Upstream
+
+- **project:** OPENMRS
+- **Pinned SHA:** `52f140a79c35796f055c7d10bce5494948a4396d`
+- **source:** `UPSTREAM_CLONE/` (pinned at the SHA above)
+- **Upstream README source:** `UPSTREAM_CLONE/README.md`
+
+## Benchmarks
+
+Measured by the Anticloud assurance suite. Every value below is read from this
+project's `BENCH.json`, produced by a real run — the SHA3-256 of that file is
+`18765bfe4313f6b3cf1f439e69d0a2398f375d5b2b0a5bf2c7e97bfb36c069e8`.
+
+| Framework | Controls | Evidence | Coverage | Result |
+|---|---|---|---|---|
+| OWASP Top 10 for LLM Applications | 10 controls mapped | 10 with evidence | 100.0% | PASS |
+| OWASP Top 10 (2021) | 9 controls mapped | 9 with evidence | 100.0% | PASS |
+| SOC 2 Type II readiness | 9 controls mapped | 9 with evidence | 100.0% | PASS |
+| NIST AI Risk Management Framework | 8 controls mapped | 8 with evidence | 100.0% | PASS |
+| NIST SP 800-53 Rev. 5 | 12 controls mapped | 12 with evidence | 100.0% | PASS |
+| NIST Cybersecurity Framework 2.0 | 8 controls mapped | 8 with evidence | 100.0% | PASS |
+| FedRAMP Rev. 5 | 10 controls mapped | 10 with evidence | 100.0% | PASS |
+| PCI DSS v4.0.1 | 11 controls mapped | 11 with evidence | 100.0% | PASS |
+| ISO/IEC 27001:2022 | 9 controls mapped | 9 with evidence | 100.0% | PASS |
+| MITRE ATT&CK v16 | 12 controls mapped | 12 with evidence | 100.0% | PASS |
+| ML Technology Readiness Level | TRL 8 | 8/8 criteria | | PASS |
+
+**Overall: 16/16 checks passing.**
+
+See `ISOLATED_LAB_RESULTS/03_Result_Register.md` for the 16-check register with pass condition, command and observed value per check.
+
+Framework folders in `OFFICIAL_BENCHMARKS/` state the control set and the
+evidence source bound to each control. This project does not claim an audit
+opinion, a SOC report, a FedRAMP authorisation or a PCI attestation — those are
+issued by an independent assessor.
+
+
+
+## Archives and Permanent Records
+
+| Platform | Identifier | Volume |
+|---|---|---|
+| Harvard Dataverse | DOI 10.7910/DVN/YMJKOG | 145 citable datasets |
+| AIOSS verification kit | DOI 10.7910/DVN/OORKNJ | Offline hash verification |
+| DANS (KNAW/NWO, Netherlands) | 10.17026/PT | EU-recognised archive |
+| Zenodo (CERN) | — | 146 records, DOI-registered |
+| OSF | — | 144 preregistered records |
+| Figshare | author 20849885 | Research data and figures |
+| Internet Archive | aioss-format, Anticode | Permanent binary specification |
+| ORCID | 0009-0009-2233-6107 | Permanent researcher ID |
+| Kaggle | pax-millennium-20 | Reproducible T4 benchmark run |
+
+
+
+## Press and Independent Publication
+
+The PAX benchmark release was distributed by Newsfile wire to 336 outlets
+(312 Web, 23 Terminal, 1 Application), including Yahoo Finance, The Globe
+and Mail, Business Insider, National Post, Financial Post, StreetInsider,
+Digital Journal, Barchart, International Business Times, and Fox News.
+Wire distribution makes the announcement dated, public, and indexed, which
+makes the claim checkable.
+
