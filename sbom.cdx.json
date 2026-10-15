@@ -1,0 +1,38 @@
+{
+  "bomFormat": "CycloneDX",
+  "specVersion": "1.5",
+  "serialNumber": "urn:uuid:aba9906c-3208-579b-8203-8610593613d0",
+  "version": 1,
+  "metadata": {
+    "timestamp": "2026-10-06T12:47:42Z",
+    "component": {
+      "type": "application",
+      "name": "OPENMRS",
+      "version": "52f140a79c35",
+      "bom-ref": "pkg:generic/anticloud/OPENMRS@52f140a79c35",
+      "purl": "pkg:generic/anticloud/OPENMRS@52f140a79c35",
+      "licenses": [
+        {
+          "license": {
+            "id": "NOASSERTION"
+          }
+        }
+      ]
+    },
+    "properties": [
+      {
+        "name": "anticloud:source-commit",
+        "value": "52f140a79c35796f055c7d10bce5494948a4396d"
+      },
+      {
+        "name": "anticloud:source-url",
+        "value": "https://github.com/openmrs/openmrs-distro-referenceapplication.git"
+      },
+      {
+        "name": "anticloud:tier",
+        "value": "tier-agent"
+      }
+    ]
+  },
+  "components": []
+}
