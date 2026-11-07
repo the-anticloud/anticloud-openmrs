@@ -416,8 +416,7 @@ Upstream © its respective contributors under NOASSERTION (harvested MIT/Apache-
 ## Benchmarks
 
 Measured by the Anticloud assurance suite. Every value below is read from this
-project's `BENCH.json`, produced by a real run — the SHA3-256 of that file is
-`18765bfe4313f6b3cf1f439e69d0a2398f375d5b2b0a5bf2c7e97bfb36c069e8`.
+project's `BENCH.json`, produced by a real run — the SHA3-256 of `BENCH.json`: `7262bfb2a8970362116c5f9bd8f72c78f7f3e50737707cc429291fd94dc0cfe0`.
 
 | Framework | Controls | Evidence | Coverage | Result |
 |---|---|---|---|---|
